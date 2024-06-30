@@ -2,7 +2,8 @@
 title: "[Learner's Notes] Announcing a New Blog Series 🎉"
 date: 2024-06-30 16:30:00 +0800
 categories: [Learner's Notes]
-tags: [learners-notes, announcement]     # TAG names should always be lowercase
+tags: [learners-notes, announcement]
+comments: false    # TAG names should always be lowercase
 ---
 
 # New Series: Learner's Notes
