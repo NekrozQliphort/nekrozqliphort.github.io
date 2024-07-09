@@ -2,7 +2,7 @@
 title: "Grind For Yellow - Counting with Equations?"
 date: 2024-07-09 10:10:00 +0800
 categories: [Grind For Yellow, Atcoder]
-tags: [grind-for-yellow, dsa]
+tags: [grind-for-yellow, dsa, atcoder]
 media_subpath: "/assets/img/posts_img/2024-07-09-counting-with-eqns/"
 math: true
 comments: true    # TAG names should always be lowercase

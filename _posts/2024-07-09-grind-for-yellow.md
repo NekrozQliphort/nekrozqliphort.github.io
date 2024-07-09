@@ -1,7 +1,7 @@
 ---
 title: "Grind For Yellow - Announcing a New Blog Series 🎉"
 date: 2024-07-09 10:00:00 +0800
-categories: [Grind For Yellow, Data Structures and Algorithms]
+categories: [Grind For Yellow]
 tags: [grind-for-yellow, announcement]
 comments: false    # TAG names should always be lowercase
 ---
