@@ -51,9 +51,9 @@ $$
 \end{equation}
 $$
 
-The key is to notice the number of solutions possible is $2^k$ where $k$ is the number of free variables (provided that the system is feasible), or in other words, the $nullity(A)$. We can first find the rank of matrix $A$ simply by perfoming Gauss Elimination to convert $A$ to its row-echelon form (REF), counting the number of nonzero rows in the resulting matrix . Finally, using the rank-nullity theorem, we obtain the nullity of the matrix by subtracting $rank(A)$ from the number of columns, $N$.
+The key is to notice the number of solutions possible is $2^k$ where $k$ is the number of free variables (provided that the system is feasible), or in other words, the $nullity(A)$. We can first find the rank of matrix $A$ simply by perfoming Gaussian Elimination to convert $A$ to its row-echelon form (REF), counting the number of nonzero rows in the resulting matrix . Finally, using the rank-nullity theorem, we obtain the nullity of the matrix by subtracting $rank(A)$ from the number of columns, $N$.
 
-> We can perform Gauss Elimination here since $\mathbb{Z}$ mod 2 is a field.
+> We can perform Gaussian Elimination here since $\mathbb{Z}$ mod 2 is a field.
 {: .prompt-info }
 
 # Code
