@@ -9,8 +9,8 @@ comments: true    # TAG names should always be lowercase
 ---
 
 > **Solved**: ✅  
-**Difficulty**: ★★★☆☆   
-**Uniqueness**: ★★★★☆
+**Difficulty**: ★★★☆☆☆   
+**Uniqueness**: ★★★★★☆
 {: .prompt-info }
 
 # Problem Statement
