@@ -84,7 +84,7 @@ int main() {
 }
 ```
 
-So, what's the crux of the issue? Look at line 19, specifically `return storage_.value_;`. Note that struct `A` contains an `int&` member. From the standard mentioned above, this means the original object will no longer automatically refer to the new object, leading to undefined behavior on line 32.
+So, what's the crux of the issue? Look at line 19, specifically `return storage_.value_;`. Note that struct `A` contains an `int&` member. From the standard mentioned above, this means the name of the original object is not guaranteed to automatically refer to the new object, leading to undefined behavior on line 32.
 
 # std::launder
 `std::launder` is designed to overcome this issue (among other issues that we'll discuss later). By using `std::launder`, we can avoid undefined behavior by modifying line 19 to `constexpr T &operator*() & noexcept { return *std::launder(&storage_.value_); }`.
