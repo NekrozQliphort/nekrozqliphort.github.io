@@ -92,7 +92,7 @@ The key to understanding how this works lies in `__mro_entries__()`. This method
 # Diving into \_\_mro_entries()\_\_
 So, what exactly is `__mro_entries__()`? Let's refer to the official documentation:
 > `object.__mro_entries__(self, bases)`  
-If a base that appears in a class definition is not an instance of `type`, then an `__mro_entries__()` method is searched on the base. If an `__mro_entries__()` method is found, the base is substituted with the result of a call to `__mro_entries__()` when creating the class. The method is called with the original bases tuple passed to the bases parameter, and must return a tuple of classes that will be used instead of the base. The returned tuple may be empty: in these cases, the original base is ignored.
+If a base that appears in a class definition is not an instance of `type`, then an `__mro_entries__()` method is searched on the base. If an `__mro_entries__()` method is found, the base is substituted with the result of a call to `__mro_entries__()` when creating the class. The method is called with the **original bases tuple** passed to the bases parameter, and must return a tuple of classes that will be used instead of the base. The returned tuple may be empty: in these cases, the original base is ignored.
 
 In simple terms, if a base is not a `class` (i.e., an instance of `type`), Python will attempt to call the base's `__mro_entries__()` method, which returns a new set of bases to be substituted. Let’s look at an example:
 ```python
@@ -100,6 +100,7 @@ class RealClass:
     ...
 
 def FakeClass(bases):
+    print(f"bases passed to FakeClass: {bases}")
     return (RealClass,)
 FakeClass.__mro_entries__ =  FakeClass
 
@@ -111,6 +112,7 @@ print(f"Base classes of Test: {Test.__bases__}")
 
 This will output:
 ```
+bases passed to FakeClass: (<function FakeClass at 0x1009cd4e0>,)
 Base classes of Test: (<class '__main__.RealClass'>,)
 ```
 But for those curious minds, you might wonder: Why was `__mro_entries__()` introduced in the first place? This puzzled me as well, and that’s why, in the next section, we’ll take a detour and explore the use case of `__mro_entries__()` in more detail.
