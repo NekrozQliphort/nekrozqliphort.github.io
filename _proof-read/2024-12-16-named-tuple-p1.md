@@ -115,6 +115,8 @@ This will output:
 Bases passed to FakeClass: (<function FakeClass at 0x1009cd4e0>,)
 Bases of Test: (<class '__main__.RealClass'>,)
 ```
+During the creation of `Test`, Python notices that the base `FakeClass` is not an instance of `type`. As a result, it calls the `__mro_entries__()` method of `FakeClass`, passing the bases of `Test` as a `tuple` (i.e., `(FakeClass,)`). The `FakeClass` function serves as the `__mro_entries__()` implementation, printing the received bases and returning `(RealClass,)`. Python then replaces the `FakeClass` base in `Test` with `RealClass`.
+
 But for those curious minds, you might wonder: Why was `__mro_entries__()` introduced in the first place? This puzzled me as well, and that’s why, in the next section, we’ll take a detour and explore the use case of `__mro_entries__()` in more detail.
 
 # The Unexpected Issue with Inheritance
