@@ -75,7 +75,7 @@ def _namedtuple_mro_entries(bases):
 
 NamedTuple.__mro_entries__ = _namedtuple_mro_entries
 ```
-At first glance, we might be tempted to focus on the contents of NamedTuple, but they’re actually not crucial unless we use it like this:
+At first glance, we might be tempted to focus on the contents of `NamedTuple`, but they’re actually not crucial unless we use it like this:
 ```python
 ExampleNamedTuple = NamedTuple('ExampleNamedTuple', [('intField', int), ('strField', str)])
 ```
@@ -100,20 +100,20 @@ class RealClass:
     ...
 
 def FakeClass(bases):
-    print(f"bases passed to FakeClass: {bases}")
+    print(f"Bases passed to FakeClass: {bases}")
     return (RealClass,)
 FakeClass.__mro_entries__ =  FakeClass
 
 class Test(FakeClass):
     ...
 
-print(f"Base classes of Test: {Test.__bases__}")
+print(f"Bases of Test: {Test.__bases__}")
 ```
 
 This will output:
 ```
-bases passed to FakeClass: (<function FakeClass at 0x1009cd4e0>,)
-Base classes of Test: (<class '__main__.RealClass'>,)
+Bases passed to FakeClass: (<function FakeClass at 0x1009cd4e0>,)
+Bases of Test: (<class '__main__.RealClass'>,)
 ```
 But for those curious minds, you might wonder: Why was `__mro_entries__()` introduced in the first place? This puzzled me as well, and that’s why, in the next section, we’ll take a detour and explore the use case of `__mro_entries__()` in more detail.
 

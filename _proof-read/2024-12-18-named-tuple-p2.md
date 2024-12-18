@@ -16,7 +16,7 @@ In Part 1, we explored how `__mro_entries__()` works and how it allows bases to 
 Now it’s time to dive deeper and figure out what `_NamedTuple` really is and how the magic happens!
 
 # Before _NamedTuple, There Was NamedTupleMeta
-As we saw last time,` _NamedTuple` is defined as follows:
+As we saw last time, `_NamedTuple` is defined as follows:
 ```python
 _NamedTuple = type.__new__(NamedTupleMeta, 'NamedTuple', (), {})
 ```
