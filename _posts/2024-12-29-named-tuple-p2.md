@@ -1,6 +1,6 @@
 ---
 title: "Learner's Notes: The Curious Case of How typing.NamedTuple Works - Part 2"
-date: 2024-12-18 02:34:00 +0800
+date: 2024-12-29 00:08:00 +0800
 categories: [Learner's Notes, Python]
 tags: [learners-notes, cs, python]
 # comments: true    # TAG names should always be lowercase
