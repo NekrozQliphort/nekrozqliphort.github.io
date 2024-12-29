@@ -204,6 +204,9 @@ defaults:
     values:
       swcache: true
 
+include:
+  - "google4f0dfc0d74c36e31.html"
+
 sass:
   style: compressed
 
