@@ -2,10 +2,8 @@
 
 source "https://rubygems.org"
 
-gemspec
+gem "jekyll-theme-chirpy", "~> 7.3", ">= 7.3.1"
 
-gem "base64", "~> 0.2.0"
-gem "csv", "~> 3.3.2"
 gem "html-proofer", "~> 5.0", group: :test
 
 platforms :mingw, :x64_mingw, :mswin, :jruby do
