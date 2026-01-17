@@ -410,8 +410,7 @@ Since inheritance uses `nvsize(D)` rather than `sizeof(D)` in these calculations
 ### Apple ARM64 differences (Clang)  
 `u/LegitimateBottle4977` and `u/Affectionate-Soup-91` pointed out that on Apple ARM64 Clang, some of the earlier examples fail to compile because the `static_assert`s do not hold.
 
-This turned out to be a Clang-specific ABI choice. After tracing the implementation, I found the relevant logic [here](https://github.com/llvm/llvm-project/blob/8e1f7793971b5d5b6516146260fe86ec6e0f8c1e/clang/include/clang/Basic/TargetCXXABI.h#L280-L305). On Apple ARM64 (and a few other targets), Clang uses the **C++11 definition of POD** for tail padding reuse rules. The rationale for this choice isn’t entirely clear, so I filed an issue with LLVM [here](https://github.com/llvm/llvm-project/issues/175486).
-.
+This turned out to be a Clang-specific choice. After tracing the implementation, I found the relevant logic [here](https://github.com/llvm/llvm-project/blob/8e1f7793971b5d5b6516146260fe86ec6e0f8c1e/clang/include/clang/Basic/TargetCXXABI.h#L280-L305). On Apple ARM64 (and a few other targets), Clang uses the **C++11 definition of POD** for tail padding reuse rules. The rationale for this choice isn’t entirely clear, so I filed an issue with LLVM [here](https://github.com/llvm/llvm-project/issues/175486).
 
 For Apple ARM64 Clang users who want the examples to work today, `u/LegitimateBottle4977` suggested a neat workaround, to explicitly make the type non-POD under the C++11 rules.
 ```cpp
