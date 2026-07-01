@@ -1,8 +1,8 @@
 ---
-title: "[DRAFT] Learner's Notes: Linux membarrier() System Call - Details of Asymmetric Fences"
-date: 2026-06-14 00:00:00 +0800
+title: "Learner's Notes: Linux membarrier() System Call - Details of Asymmetric Fences"
+date: 2026-07-06 00:00:00 +0800
 categories: [Learner's Notes, C++]
-media_subpath: "/assets/img/posts_img/2026-06-14-membarrier"
+media_subpath: "/assets/img/posts_img/2026-07-06-membarrier"
 tags: [learners-notes, linux, c++]
 math: true
 ---
@@ -14,16 +14,16 @@ That question led me down an interesting rabbit hole: understanding the details 
 
 # C++ P1202R0 Introduction
 We’ll walk through the mechanics in a later section, but for now it suffices to understand what these fences are trying to achieve. Referring to the [proposal](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2018/p1202r0.pdf), let’s look at the overview:
-> Some types of concurrent algorithms can be split into a common path and an uncommon path, both of which require fences (or other operations with non-relaxed memory orders) for correctness. On many platforms, it’s possible to speed up the common path by adding an even stronger fence type (stronger than `memory_order_seq_cst`) down the uncommon path. These facilities are being used in an increasing number of concurrency libraries. We propose standardizing these asymmetric fences, and incorporating them into the memory model.
+> Some types of concurrent algorithms can be split into a **common path** and an **uncommon path**, both of which require fences (or other operations with non-relaxed memory orders) for correctness. On many platforms, it’s possible to **speed up the common path**  by adding an even stronger fence type (stronger than `memory_order_seq_cst`) down the uncommon path. These facilities are being used in an increasing number of concurrency libraries. We propose standardizing these asymmetric fences, and incorporating them into the memory model.
 
 Essentially, a concurrent algorithm may originally require a fence on both sides. However, if one path is significantly more common than the other, we may optimize for the common path by using a lighter fence there, while shifting the heavier synchronization cost onto the uncommon path. This can result in an overall performance improvement if we ensure the performance gain from the common path is much more than the overhead from the heavier fence of the uncommon path.
 
 This pattern is more common than it may first appear. If you browse through Folly’s codebase, you can find several uses of it:
 - `folly/synchronization/HazptrDomain.h`: Hazard Pointers
 - `folly/synchronization/detail/ThreadCachedReaders.h`: RCU
-- `folly/executors/ThreadPoolExecutor.cpp`: Thread Pool Executor
+- `folly/executors/ThreadPoolExecutor.cpp`: Thread Pool ExWcutor
 
-Let’s begin with a modified example from the paper, known as Dekker’s example:
+Let’s begin with a modified example from the paper, known as Dekker's example:
 ```cpp
 atomic_int x{0}, y{0};
 int r1, r2;
@@ -41,13 +41,13 @@ r2 = x.load(memory_order_relaxed);
 // Happens after both paths are completed.
 assert(!(r1 == 0 && r2 == 0)); // Never fails.
 ```
-We know the assertion cannot fail. Let’s examine why under the C++ memory model:
+We know the assertion cannot fail. Let's examine why under the C++ memory model:
 ![Dekker's Example](dekkers-example-light.png){: .light }
 ![Dekker's Example](dekkers-example-dark.png){: .dark }
 
-- Constraint $(1) \rightarrow (2)$ and $(1) \rightarrow (5)$ arise from the synchronizes-with relationship between thread construction and the start of the thread function [\[thread.thread.constr\]/6](https://eel.is/c++draft/thread.thread.constr#6). This also establishes the modification order of both `X` and `Y` via the write-write coherence guarantees described in [\[intro.races\]/15](https://timsong-cpp.github.io/cppwp/n4950/intro.races#15).W
+- Constraint $(1) \rightarrow (2)$ and $(1) \rightarrow (5)$ arise from the synchronizes-with relationship between thread construction and the start of the thread function [\[thread.thread.constr\]/6](https://eel.is/c++draft/thread.thread.constr#6). This also establishes the modification order of both `X` and `Y` via the write-write coherence guarantees described in [\[intro.races\]/15](https://timsong-cpp.github.io/cppwp/n4950/intro.races#15).
 - Constraint $(4) \rightarrow (5)$ and $(7) \rightarrow (2)$ are coherence-orderings that arise from the requirements in [\[atomics.order\]/3.3](https://timsong-cpp.github.io/cppwp/n4950/atomics.order#3.3). For example, $(4)$ and $(5)$ are not the same atomic read-modify-write operation, and $(4)$ reads the value stored by $(1)$, and $(1)$ precedes $(5)$ in the modification order of `Y`.
-- From [\[atomics.order\]/4.4](https://timsong-cpp.github.io/cppwp/n4950/atomics.order#4.4), `memory_order​::​seq_cst` fence $A$ happens-before $(4)$, and $(5)$ happens-before `memory_order​::​seq_cst` fence $B$, therefore $(3)$ must precede $(6)$ in the single total order S on all `memory_order​::​seq_cst` operations. By symmetric reasoning, $(6)$ must also precede $(3)$ in the same total order $S$.
+- From [\[atomics.order\]/4.4](https://timsong-cpp.github.io/cppwp/n4950/atomics.order#4.4), `memory_order​::​seq_cst` fence $A$ happens-before $(4)$, and $(5)$ happens-before `memory_order​::​seq_cst` fence $B$, therefore $(3)$ must precede $(6)$ in the single total order $S$ on all `memory_order​::​seq_cst` operations. By symmetric reasoning, $(6)$ must also precede $(3)$ in the same total order $S$.
 
 This is impossible, hence a contradiction. Therefore the execution where `r1 == 0 && r2 == 0` is forbidden.
 
@@ -87,7 +87,7 @@ Here, we only care about the clobber list, specifically the special `"memory"` c
 > 
 > Note that this clobber **does not prevent the processor from doing speculative reads past the asm statement**. To prevent that, you need **processor-specific fence instructions**. 
 
-This means that the compiler must preserve the ordering of memory reads and writes with respect to `asm volatile("" : : : "memory")`, effectively making it a compiler barrier. However, this places constraints only on instruction reordering performed by the compiler, not on the processor itself. The CPU may still execute memory operations out-of-order at runtime.
+This means that the compiler **must preserve the ordering of memory reads and writes with respect to `asm volatile("" : : : "memory")`**, effectively making it a **compiler barrier**. However, this places constraints only on instruction reordering performed by the compiler, not on the processor itself. The CPU may still execute memory operations out-of-order at runtime.
 
 As an additional note, we can also examine what the `volatile` qualifier does here:
 
@@ -128,12 +128,12 @@ This command simply registers the process's intent to later use `membarrier()` w
 > A process must register its intent to use the private expedited command prior to using it.
 We choose `MEMBARRIER_CMD_PRIVATE_EXPEDITED` instead of `MEMBARRIER_CMD_GLOBAL` or `MEMBARRIER_CMD_GLOBAL_EXPEDITED` because we only require the barrier to affect threads within a single process.
 
-The documentation also gives us the guarantee for each targeted thread, there exists some time $T$ during the interval between the invocation and return of `membarrier()` at which its memory accesses to user-space addresses are consistent with program order in the emitted assembly. That is, for each targeted thread, there exists some point $T$ during that interval where no memory accesses $A$ and $B$ can exist such that $A$ is program-ordered before $B$, yet $B$ has completed while $A$ has not.
+The documentation also gives us the guarantee for each targeted thread, there exists some time $T$ during the interval between the invocation and return of `membarrier()` at which its memory accesses to user-space addresses are **consistent with the program order in the emitted assembly**. That is, for each targeted thread, there exists some point $T$ during that interval where no memory accesses $A$ and $B$ can exist such that $A$ is program-ordered before $B$, yet the effects of $B$ are observable before those of $A$.
 
-However, the exact synchronization primitives are defined by the next rule:
+Additionally, to ensure this works as intended, `membarrier()` enforces an ordering guarantee on the targeted threads, stated as follows:
 > All memory accesses performed in program order from each targeted thread are guaranteed to be ordered with respect to `membarrier()`.
 
-In short, a thread's program-order memory accesses are ordered with respect to `membarrier()`, thereby separating operations that occur before the barrier from those that occur after it. **Within a thread**, writes (and reads) deemed to have happened before the `membarrier()` must be **globally visible (and satisfied)** before writes (and reads) that are deemed to happen after the `membarrier()`. If you remember from my [previous blog](../happens-b4), this is basically what `sync`/`hwsync` does for PowerPC and we will see why a little later. 
+In short, a thread's program-order memory accesses are ordered with respect to `membarrier()`, thereby separating operations that occur before the barrier from those that occur after it. **Within a thread**, writes (and reads) deemed to have happened before the `membarrier()` must be **globally visible (and satisfied)** before writes (and reads) that are deemed to happen after the `membarrier()`. If you remember from my [previous blog](../happens-b4), this is basically what `sync`/`hwsync` does for PowerPC, as we will see shortly.
 
 The Linux manual page summarizes the pairwise ordering relationships between these primitives with the following table (O: ordered, X: not ordered):
 
@@ -234,9 +234,9 @@ If that reordering happens, we run into the following scenario:
 4. Before CPU 1 writes `y = 1`, CPU 0 reads `r2 = y`, hence reading `r2 = 0`.
 
 This results in the forbidden `r1 == 0 && r2 == 0` outcome, entirely breaking the guarantees of `membarrier()`. By enforcing `smp_mb()` at $(1)$, the kernel creates a a strict ordering chain, similar to a [fence-fence synchronization](https://en.cppreference.com/cpp/atomic/atomic_thread_fence) of `std::atomic_thread_fence`:  
-`smp_mb()` on CPU 0 $\rightarrow$ Send IPI $\rightarrow$ Receive IPI on CPU 1 $\rightarrow$ `smp_mb()` on CPU 1. (Note: The Send IPI $\rightarrow$ Receive IPI sequence does not itself establish memory ordering guarantees. Because IPIs are hardware signaling mechanisms and do not interact with shared memory, they are not considered events under the Linux-Kernel Memory Consistency Model. However, it is helpful as an intuitive abstraction to understand the core idea). 
+`smp_mb()` on CPU 0 $\rightarrow$ Send IPI $\rightarrow$ Receive IPI on CPU 1 $\rightarrow$ `smp_mb()` on CPU 1. (Note: The Send IPI $\rightarrow$ Receive IPI sequence does not itself establish memory ordering guarantees. Because IPIs are hardware signaling mechanisms and do not interact with shared memory, they are not considered events under the Linux Kernel Memory Consistency Model (LKMM). However, it is helpful as an intuitive abstraction to understand the core idea). 
 
-This chain effectively establishes a happens-before relationship between memory operations preceding the `smp_mb()` at $(1)$ on the sending CPU and memory operations following the IPI-induced barrier on the receiving CPU (which is stronger than the guarantee exposed by the `membarrier()` API). Because both sides use `smp_mb()`, this ordering is globally respected by all CPUs.
+This chain effectively establishes a happens-before relationship between memory operations preceding the `smp_mb()` at $(1)$ on the sending CPU and memory operations following the IPI-induced barrier on the receiving CPU. Because both sides use `smp_mb()`, this ordering is globally respected by all CPUs.
 
 ## Case 2: Userspace Thread Execution before Membarrier-Induced IPI
 ![Membarrier Case 2 Execution Graph](membarrier-case-2-light.png){: .light }
@@ -250,24 +250,28 @@ If that reordering happens, we run into the following scenario:
 3. As CPU 0's `r1 = x` is reordered to before sending the IPI, CPU 0 reads `r1 = 0`.
 4. CPU 0 sends the IPI to CPU 1, which then executes the IPI-induced `smp_mb()`.
 
-This results in the `r1 == 0 && r2 == 1` scenario, which is not allowed to happen under the guarantees provided by `membarrier()`. Again with `smp_mb()` at $(3)$, the kernel enforces this particular chain of events: Receive IPI on CPU 1 $\rightarrow$ smp_mb() on CPU 1 $\rightarrow$ CPU 0 waits for CPU 1 to finish executing the barrier $\rightarrow$ smp_mb() on CPU 0. This chain effectively establishes a happens-before relationship between memory operations preceding the IPI-induced barrier on the receiving CPU and memory operations following the `smp_mb()` at $(3)$ on the sending CPU (which is stronger than the guarantee exposed by the `membarrier()` API). Because both sides use `smp_mb()`, all CPUs must observe these operations as being ordered in that direction.
+This results in the `r1 == 0 && r2 == 1` scenario, which is not allowed to happen under the guarantees provided by `membarrier()`. Again with `smp_mb()` at $(3)$, the kernel enforces this particular chain of events: Receive IPI on CPU 1 $\rightarrow$ smp_mb() on CPU 1 $\rightarrow$ CPU 0 waits for CPU 1 to finish executing the barrier $\rightarrow$ smp_mb() on CPU 0. This chain effectively establishes a happens-before relationship between memory operations preceding the IPI-induced barrier on the receiving CPU and memory operations following the `smp_mb()` at $(3)$ on the sending CPU. Because both sides use `smp_mb()`, all CPUs must observe these operations as being ordered in that direction.
 
 ## Case 3: Context Switching - Scheduling Userspace Thread $\rightarrow$ Kthread $\rightarrow$ Userspace Thread
 ![Membarrier Case 3 Execution Graph](membarrier-case-3-light.png){: .light }
 ![Membarrier Case 3 Execution Graph](membarrier-case-3-dark.png){: .dark }
 
-Note that in $(4)$, switching to a kernel thread involves an execution path of `rq_lock(rq, &rf)` $\rightarrow$ `smp_mb__after_spinlock()`, which effectively acts as an `smp_mb()`, followed by a write to `RCU_INIT_POINTER(rq->curr, next)` inside `__schedule(int sched_mode)`. In our scenario, this update is later observed by the membarrier call at $(2)$. This sequence establishes a read-from relationship in the execution graph, as visualized below. Together with the memory barriers at $(3)$ and $(4)$, this constrains the ordering such that memory operations before $(4)$ are globally ordered before memory operations following $(3)$.
+Note that in $(4)$, switching to a kernel thread involves an execution path of `rq_lock(rq, &rf)` $\rightarrow$ `smp_mb__after_spinlock()`, which effectively acts as an `smp_mb()`, followed by a write to `RCU_INIT_POINTER(rq->curr, next)` inside `__schedule(int sched_mode)`. In our scenario, this update is later observed by the membarrier call at $(2)$. This sequence establishes a read-from relationship in the execution graph, as visualized below. Together with the memory barriers at $(3)$ and $(4)$, this establishes a global ordering between the memory operations preceding $(4)$ and those following $(3)$.
 
 ![Membarrier Case 3 Read-From Execution Graph](membarrier-case-3-rf-light.png){: .light }
 ![Membarrier Case 3 Read-From Execution Graph](membarrier-case-3-rf-dark.png){: .dark }
- 
-The second requirement we need is that all memory accesses before $(1)$ are globally ordered before memory accesses after $(5)$. Switching back to a userspace thread also executes a write to `RCU_INIT_POINTER(rq->curr, next)` followed by an `smp_mb()`.  As documented in [membarrier.rst](https://www.kernel.org/doc/Documentation/scheduler/membarrier.rst), this `smp_mb()` may appear in different locations depending on architecture, but it always occurs after `rq->curr` is updated in `context_switch(struct rq *rq, struct task_struct *prev, struct task_struct *next, struct rq_flags *rf)` call. At first glance, nothing seems to explicitly link these two memory barriers together. However, because the `membarrier()` call at $(2)$ observes the previous value of `rq->curr`, while the remote core's transition back to userspace later writes a new value to the same location, we obtain a read-before relationship in the execution graph (a concept detailed in my previous [blog](../happens-b4) post on strongly happens before relationships). Do note that, unlike Case 1 and Case 2, this read-before relationship does not constitute a happens-before edge, so we cannot offer a stronger guarantee than what the `membarrier()` API states.
+
+For the final key to the puzzle, let's observe how the memory barriers at $(1)$ and $(5)$ relate to one another. As documented in [membarrier.rst](https://www.kernel.org/doc/Documentation/scheduler/membarrier.rst), this `smp_mb()` may appear in different locations depending on architecture, but it always occurs after `rq->curr` is updated in `context_switch(struct rq *rq, struct task_struct *prev, struct task_struct *next, struct rq_flags *rf)` call. At first glance, nothing seems to explicitly link these two memory barriers together. However, because the `membarrier()` call at $(2)$ observes the previous value of `rq->curr`, while the remote core's transition back to userspace subsequently writes a new value to the same location, we obtain a read-before edge in the execution graph (a concept detailed in my previous [blog](../happens-b4) post on strongly happens before relationships).
 
 The execution graph below illustrates this ordering:
 ![Membarrier Case 3 Read-Before Execution Graph](membarrier-case-3-rb-light.png){: .light }
 ![Membarrier Case 3 Read-Before Execution Graph](membarrier-case-3-rb-dark.png){: .dark }
 
-With this execution graph in mind, the reason why memory accesses before $(1)$ are globally ordered before memory accesses after $(5)$ becomes clear. For the astute readers among you, you may have already noticed that this can be proven by going through a derivation identical to our previous Dekker's Example proof, so I'll leave that as an exercise for the reader!
+Why does this give us the guarantee we need? This is analogous to our Dekker's example:
+![Membarrier Case 3 Read-Before Execution Graph](membarrier-case-3-rb-explanation-light.png){: .light }
+![Membarrier Case 3 Read-Before Execution Graph](membarrier-case-3-rb-explanation-dark.png){: .dark }
+
+Using this example, if `r1 = x` reads the value 0, this forms a second read-before edge,  completing a cycle in the execution graph. This is explicitly disallowed by LKMM as it is a violation of the acyclic property of the propagates-before relation (and similarly violates the single total order $S$ on all `memory_order::seq_cst` operations in the C++ memory model). Consequently, memory accesses after $(5)$ are ordered after those preceding $(1)$, preventing the forbidden execution. However, do note that a read-before edge does not constitute a happens-before and later I will highlight the difference this causes.
 
 With that, we have walked through the primary execution paths to understand exactly how `membarrier()` enforces consistency under the hood (though additional cases exist within the long-form comments of `kernel/sched/membarrier.c`).
 
@@ -275,11 +279,11 @@ With that, we have walked through the primary execution paths to understand exac
 Although we have covered the core execution flow of `membarrier()`, I want to highlight a few extra details for readers interested in the exact kernel mechanics.
 
 ## The Memory Ordering Gurantees of IPIs
-As we established earlier, IPIs themselves are hardware signals that do not interact with shared memory, meaning the Linux-Kernel Memory Consistency Model does not treat them as ordering events. So, what actually establishes the formal synchronization edges in our execution graph?
+As we established earlier, IPIs themselves are hardware signals that do not interact with shared memory, meaning LKMM does not treat them as ordering events. So, what actually establishes the formal synchronization edges in our execution graph?
 
-The answer lies in the SMP callback queue infrastructure. When we say `membarrier()` sends an IPI to force another CPU to execute `smp_mb()`, internally it relies on `smp_call_function_many_cond(const struct cpumask *mask, smp_call_func_t func, void *info, unsigned int scf_flags, smp_cond_func_t cond_func)`. Before the IPI is issued, this function packages the `smp_mb()` callback into a `call_single_data`(`csd`) object and enqueues it onto the target CPU’s `call_single_queue` in shared memory. When the remote CPU receives the IPI, its interrupt handler executes `__flush_smp_call_function_queue(bool warn_cpu_offline)`. This function reads the newly enqueued callback from shared memory, establishing a read-from relationship between the producer CPU (which enqueued the `csd`) and the consumer CPU (which executes it). For the return path, when the `membarrier()` caller waits for completion, it calls `csd_lock_wait(csd)`, which blocks until the remote CPU signals completion via `csd_unlock(csd)`. This introduces a read-from relationship through the completion state.
+The answer lies in the SMP callback queue infrastructure. When we say `membarrier()` sends an IPI to force another CPU to execute `smp_mb()`, internally it relies on `smp_call_function_many_cond(const struct cpumask *mask, smp_call_func_t func, void *info, unsigned int scf_flags, smp_cond_func_t cond_func)`. Before the IPI is issued, this function packages the `smp_mb()` callback into a `call_single_data`(`csd`) object and enqueues it onto the target CPU’s `call_single_queue` in shared memory. When the remote CPU receives the IPI, its interrupt handler executes `__flush_smp_call_function_queue(bool warn_cpu_offline)`. This function **reads the newly enqueued callback from shared memory, establishing a read-from relationship between the producer CPU (which enqueued the `csd`) and the consumer CPU (which executes it)**. For the return path, when the `membarrier()` caller waits for completion, it calls `csd_lock_wait(csd)`, which **blocks until the remote CPU signals completion via `csd_unlock(csd)`**. This introduces a **read-from relationship** through the completion state.
 
-The final piece of the puzzle is this: if sending an IPI does not inherently involve shared memory, how do we guarantee the interrupted core actually observes the newly enqueued csd object after it is interrupted? The kernel solves this using architecture-specific memory barriers immediately before the IPI is issued. On x86-64 APIC mode, a combination of `mfence; lfence` is used, as stated in the Intel® 64 and IA-32 Architectures Software Developer’s Manual Volume 3 13.12.3:
+The final piece of the puzzle is this: if sending an IPI does not inherently involve shared memory, how do we guarantee the interrupted core actually observes the newly enqueued `csd` object after it is interrupted? The kernel solves this using architecture-specific memory barriers immediately before the IPI is issued. On x86-64 x2APIC mode, a combination of `mfence; lfence` is used, as stated in the Intel® 64 and IA-32 Architectures Software Developer’s Manual Volume 3 13.12.3:
 > A `WRMSR` to an APIC register may complete before all preceding stores are globally visible; software can prevent this by inserting a serializing instruction or the sequence `MFENCE;LFENCE` before the `WRMSR`.
 (Note: I have not found formal documentation explaining this mechanism in detail. The closest available explanation appears in the Linux Kernel comment in `weak_wrmsr_fence`, which states: `MFENCE` makes writes visible, but only affects load/store instructions. `WRMSR` is unfortunately not a load/store instruction and is unaffected by `MFENCE`. The `LFENCE` ensures that the `WRMSR` is not reordered.)
 
@@ -310,7 +314,7 @@ We'll take a look at the failed attempts mentioned in the paper, followed by the
 ## The Straightforward Idea
 The first approach is as follows:
 > - Heavy fences are also `memory_order_seq_cst` fences.
-> - For every light fence `L` and heavy fence `H`, either `H` synchronizes with `L` or `L` synchronizes with `H`.
+> - For every light fence $L$ and heavy fence $H$, either $H$ synchronizes with $L$ or $L$ synchronizes with $H$.
 
 This formalization seems relatively straightforward, and we can see why it works for Dekker's example using a derivation similar to the one shown above. Unfortunately, as David Goldblatt mentioned in the proposal, it does not actually work. Let's take a look at the counter-example:
 ```cpp
@@ -341,16 +345,16 @@ Unfortunately, this assert can indeed fire. Below is the execution graph showing
 ![Asymmetric Fence Formalization Approach 1 Counterexample Execution Graph](membarrier-formalization-approach-1-counterexample-dark.png){: .dark }
 
 The problem now is that using synchronizes-with actually forbids that outcome. David explains it well it his proposal:
-> `R0 == 0` would imply that T0's light fence synchronizes with T1's heavy fence. Similarly, `R1 == 0` implies that T1's heavy fence synchronizes with T2's light fence. Combining these, we would have that T0's store to X should happen before T2's load, and that therefore `R2 == 1`.
+> `R0 == 0` would imply that T0's light fence synchronizes with T1's heavy fence. Similarly, `R1 == 0` implies that T1's heavy fence synchronizes with T2's light fence. Combining these, we would have that T0's store to `X` should happen before T2's load, and that therefore `R2 == 1`.
 
 From [\[intro.races\]/9](https://timsong-cpp.github.io/cppwp/n4950/intro.races#9) and [\[intro.races\]/10](https://timsong-cpp.github.io/cppwp/n4950/intro.races#10), we know that the synchronizes-with relationship implies a happens-before relationship, and that the happens-before relationship is transitive. As this formalization mathematically forbids an outcome that the underlying hardware actually allows, it would force implementations to emit stronger, more expensive barriers to prevent it. This transitivity is ultimately what caused this formalization to fail criterion 1.
 
 ## Preventing Transitivity
 In an attempt to prevent the transitivity issue, the proposal's second attempt replaces the previous rule with the following:
 
-> For every light fence `L` and heavy fence `H`, one of the following holds:  
->    a. Every evaluation that is sequenced before `L` strongly happens before every evaluation that `H` is sequenced before.  
->    b. Every evaluation that is sequenced before `H` strongly happens before every evaluation that `L` is sequenced before.
+> For every light fence $L$ and heavy fence $H$, one of the following holds:  
+>    a. Every evaluation that is sequenced before $L$ strongly happens before every evaluation that $H$ is sequenced before.  
+>    b. Every evaluation that is sequenced before $H$ strongly happens before every evaluation that $L$ is sequenced before.
 
 To see how this breaks the transitivity chain, let's refer to the execution graph below:
 ![Asymmetric Fence Formalization Approach 2 Example Execution Graph](membarrier-formalization-approach-2-example-light.png){: .light }
@@ -394,7 +398,7 @@ Now, let's look at what happens if we replace `fence0()` and `fence1()` with our
 
 By forcing this explicit happens-before edge, the new formalization mathematically prevents the data-race, which, ironically, ends up being the issue. Since this new wording provides stronger guarantees than plain `memory_order_seq_cst` fences, asymmetric fences cannot use standard fences as a fallback implementation on unsupported platforms, which fundamentally violates criterion 2.
 
-On an interesting side note, I would argue that this proposed formalization also violates criterion 1 (implementability with `membarrier()`). If we recall Cases 1 and 2 from our earlier analysis, the implementation establishes a happens-before relationship between the relevant operations. In contrast, Case 3 partially derives its ordering from a read-before relationship. While this is sufficient to satisfy the specific ordering guarantees of the `membarrier()` API, a read-before relationship does not itself establish a happens-before relationship under the C++ memory model, even with `smp_mb()`.
+On an interesting side note, I would argue that this proposed formalization also violates criterion 1 (implementability with `membarrier()`). If we recall Cases 1 and 2 from our earlier analysis, the implementation establishes a happens-before relationship between the relevant operations. In contrast, Case 3 partially derives its ordering from a read-before relationship. While this is sufficient to satisfy the specific ordering guarantees of the `membarrier()` API, a read-before relationship does not itself establish a happens-before relationship under the C++ memory model (nor LKMM), even with `smp_mb()`.
 
 As a consequence, ordinary loads and stores remain unordered and may therefore race. To prove this, I constructed the following litmus test using `herd7` and the LKMM specifications (found under `tools/memory-model` in the Linux kernel):
 ```
@@ -411,9 +415,9 @@ P0(int *data, int *x, int *P0_won_the_race, int *rq_state)
     // ====================================================
     // fence0(): sys_membarrier() path on CPU0
     // ====================================================
-    smp_mb();                        // a: entry barrier
-    int r_rq = READ_ONCE(*rq_state); // b: read rq->curr->mm == NULL
-    smp_mb();                        // c: exit barrier
+    smp_mb();                        // (1) entry barrier
+    int r_rq = READ_ONCE(*rq_state); // (2) read rq->curr->mm == NULL
+    smp_mb();                        // (3) exit barrier
     // ====================================================
 
     // if (x.load(relaxed) == 0)
@@ -429,11 +433,11 @@ P1(int *data, int *x, int *P0_won_the_race, int *rq_state)
     // Context switch happens at the VERY BEGINNING of P1
     // ====================================================
     smp_mb();                        // rq_lock(); smp_mb__after_spinlock() in __schedule()
-    WRITE_ONCE(*rq_state, 1);        // d: switch to kthread (simulate setting rq->curr->mm = NULL)
+    WRITE_ONCE(*rq_state, 1);        // (4) switch to kthread (simulate setting rq->curr->mm = NULL)
     smp_mb();                        // inherent barrier in context_switch()
     
     smp_mb();                        // rq_lock(); smp_mb__after_spinlock() in __schedule()
-    WRITE_ONCE(*rq_state, 2);        // e: switch back to user thread (simulate setting rq->curr->mm != NULL)
+    WRITE_ONCE(*rq_state, 2);        // (5) switch back to user thread (simulate setting rq->curr->mm != NULL)
     smp_mb();                        // inherent barrier in context_switch()
     // ====================================================
 
@@ -458,9 +462,7 @@ exists (1:r1 = 1 /\ 1:r2 = 0)
 ```
 
 Running this test under LKMM yields:
-
 ```
-Here is the outcome:
 Test membarrier_pre_switch_race Allowed
 States 3
 1:r1=0; 1:r2=0;
@@ -473,11 +475,11 @@ Flag data-race
 Condition exists (1:r1=1 /\ 1:r2=0)
 Observation membarrier_pre_switch_race Sometimes 1 3
 Time membarrier_pre_switch_race 0.01
-Hash=336232af8077009b43ed99c057542592
+Hash=2b7111a8ad77523d6b4f25c0844e6ec7
 ```
-LKMM explicitly flags the execution as containing a data-race. Replacing the plain accesses to data with `WRITE_ONCE()` and `READ_ONCE()` removes the race, demonstrating that the ordering derived from the Case 3 path is insufficient to establish the happens-before relationship required to safely synchronize ordinary loads and stores. Since the proposed C++ wording requires that, for every pair of light and heavy fences, either all evaluations sequenced before the light fence strongly happens before all evaluations sequenced before the heavy fence, or vice versa, it requires a level of ordering that cannot be established by `membarrier()` in the Case 3 execution path. Therefore, it is not directly implementable using the system call, as the syscall is inherently incapable of providing the required semantics.
+herd7 under LKMM explicitly flags the execution as containing a data-race. Replacing the plain accesses to data with `WRITE_ONCE()` and `READ_ONCE()` removes the race, demonstrating that the ordering derived from the Case 3 path is insufficient to establish the happens-before relationship required to safely synchronize ordinary loads and stores. Since the proposed C++ wording requires that, for every pair of light and heavy fences, either all evaluations sequenced before the light fence strongly happens before all evaluations sequenced before the heavy fence, or vice versa, it requires a level of ordering that cannot be established by `membarrier()` in the Case 3 execution path. Therefore, it is not directly implementable using the system call, as the syscall is inherently incapable of providing the required semantics.
 
-I also discussed this with David:
+I had an incredibly insightful discussion with David regarding this behavior (and other things in the proposal), here is his response regarding this analysis:
 > Hmmm, this analysis seems right to me (or at least, right-looking enough that I now lack confidence in the P1202 claim is correct). I think I had convinced myself that either:  
 > - We do the RCU-like pathway (non-expedited, strong synchronization), or  
 > - We do IPIs (expedited, strong synchronization)  
@@ -503,13 +505,13 @@ The wording also includes a section for asymmetric fences that use release-acqui
 > - $A$ is a release heavyweight-fence and $B$ is an acquire lightweight-fence
 > then any evaluation sequenced before $A$ strongly happens before any evaluation that $B$ is sequenced before.
 
-Technically, this wording still requires a bit of ironing out. Under the current definitions in [\[intro.races\]/11](https://timsong-cpp.github.io/cppwp/n4950/intro.races#11) and [\[intro.races\]/12](https://timsong-cpp.github.io/cppwp/n4950/intro.races#12), strongly happens before actually does not imply happens before for this specific asymmetric fence case. This leads to unexpected outcomes that one would normally expect from standard release-acquire semantics. This disconnect happens largely because most of the C++ standard relies on the happens before relationship to define memory ordering and coherency constraints (e.g., [\[intro.races\]/18](https://timsong-cpp.github.io/cppwp/n4950/intro.races#18)). I reached out to David Goldblatt about this discrepancy, and he shared this bit of insider context:
+Technically, this wording still requires a bit of ironing out. Under the current definitions in [\[intro.races\]/11](https://timsong-cpp.github.io/cppwp/n4950/intro.races#11) and [\[intro.races\]/12](https://timsong-cpp.github.io/cppwp/n4950/intro.races#12), strongly happens before actually does not imply happens before for this specific asymmetric fence case. This leads to unexpected outcomes that one would normally expect from standard release-acquire semantics. This disconnect happens largely because most of the C++ standard relies on the happens before relationship to define memory ordering and coherency constraints (e.g., [\[intro.races\]/18](https://timsong-cpp.github.io/cppwp/n4950/intro.races#18)). I also checked with David about this discrepancy, and he shared this bit of insider context:
 > When SG1 added strongly happens before, we meant for it to get included into happens before, but forgot to actually include words to that effect. We talked a little bit about this at the Croyden meeting and said we needed to file a Core issue about it, but no one has actually gotten around to doing so. (This shows up in other places in the library clause too, so it's probably something we should fix in the definitions). Thanks.
 
-It looks like we'll just have to wait and see what changes the committee makes in the future! :D
+It looks like we'll just have to wait and see what changes the committee makes in the future!
 
 # Conclusion
-Well, that's it for this post! It took over two months of deep-diving, researching, and writing to put all of this together, so I truly hope you enjoyed it and stick around for more. A massive thank you to David Goldblatt for responding to my inquiries! Getting his direct insights on the formalization was incredibly helpful and deeply appreciated.
+Well, that's it for this post! It took over three months of deep-diving, researching, and writing to put all of this together, so I truly hope you enjoyed it and stick around for more. A massive thank you to David Goldblatt for responding to my inquiries! Getting his direct insights on the formalization was incredibly helpful and deeply appreciated.
 
 Till next time!
 
@@ -518,7 +520,7 @@ Till next time!
 2. [Proposal P1202R5](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2022/p1202r5.pdf)
 3. [Working Draft, Extensions to C++ for Concurrency Version 2](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2023/n4953.pdf)
 4. [Herding Cats: Modelling, Simulation, Testing, and Data Mining for Weak Memory](https://dl.acm.org/doi/epdf/10.1145/2627752)
-5. [Linux-Kernel Memory Consistency Model Explanation](https://github.com/torvalds/linux/blob/master/tools/memory-model/Documentation/explanation.txt)
+5. [Linux Kernel Memory Consistency Model Explanation](https://github.com/torvalds/linux/blob/master/tools/memory-model/Documentation/explanation.txt)
 6. [MEMBARRIER_CMD_{PRIVATE,GLOBAL}_EXPEDITED - Architecture requirements](https://www.kernel.org/doc/Documentation/scheduler/membarrier.rst)
 7. [Working Draft, Standard for Programming Language C++ (C++23)](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2023/n4950.pdf)
 8. [ARM Compiler toolchain Assembler Reference](https://developer.arm.com/documentation/dui0489/i/arm-and-thumb-instructions/)
