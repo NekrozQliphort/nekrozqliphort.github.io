@@ -460,24 +460,29 @@ P1(int *data, int *x, int *P0_won_the_race, int *rq_state)
 filter (0:r_rq = 1) 
 exists (1:r1 = 1 /\ 1:r2 = 0)
 ```
+Unfortunately, the built-in data-race flag is evaluated independently of the litmus test's `filter` and `exists` clauses, making it difficult to determine whether the specific execution we are interested in is the one containing the race. Fortunately, LKMM allows us to inspect the race relation directly.
 
-Running this test under LKMM yields:
+To do so, add the following lines to `linux-kernel.cat` (located under `tools/memory-model/`, use this directory as your working directory):
 ```
-Test membarrier_pre_switch_race Allowed
-States 3
-1:r1=0; 1:r2=0;
-1:r1=1; 1:r2=0;
-1:r1=1; 1:r2=1;
-Ok
-Witnesses
-Positive: 1 Negative: 3
-Flag data-race
-Condition exists (1:r1=1 /\ 1:r2=0)
-Observation membarrier_pre_switch_race Sometimes 1 3
-Time membarrier_pre_switch_race 0.01
-Hash=2b7111a8ad77523d6b4f25c0844e6ec7
+let race = (ww-race | wr-race | rw-race)
+show race
 ```
-herd7 under LKMM explicitly flags the execution as containing a data-race. Replacing the plain accesses to data with `WRITE_ONCE()` and `READ_ONCE()` removes the race, demonstrating that the ordering derived from the Case 3 path is insufficient to establish the happens-before relationship required to safely synchronize ordinary loads and stores. Since the proposed C++ wording requires that, for every pair of light and heavy fences, either all evaluations sequenced before the light fence strongly happens before all evaluations sequenced before the heavy fence, or vice versa, it requires a level of ordering that cannot be established by `membarrier()` in the Case 3 execution path. Therefore, it is not directly implementable using the system call, as the syscall is inherently incapable of providing the required semantics.
+
+Now run:
+```
+herd7 -conf linux-kernel.cfg -show cond -o . membarrier_case_3_data_race.litmus
+```
+The generated `.dot` file will now include edges belonging to the race relation. For this litmus test, the output contains:
+```
+eiid0 [label="a: W[data]=1", shape="none", fontsize=8, pos="1.000000,10.125000!", fixedsize="false", height="0.111111", width="1.000000"];
+...
+eiid8 [label="i: R[data]=0", shape="none", fontsize=8, pos="3.000000,0.000000!", fixedsize="false", height="0.111111", width="1.000000"];
+...
+eiid8 -> eiid0 [label="race", color="brown", fontcolor="brown", fontsize=8, arrowsize="0.800000"];
+```
+The edge labeled `race` connects the plain read of `data` to the plain write of `data`, confirming that these accesses form a data-race in the simulated `membarrier()` sequence!
+
+Replacing the plain accesses to data with `WRITE_ONCE()` and `READ_ONCE()` removes the race, demonstrating that the ordering derived from the Case 3 path is insufficient to establish the happens-before relationship required to safely synchronize ordinary loads and stores. Since the proposed C++ wording requires that, for every pair of light and heavy fences, either all evaluations sequenced before the light fence strongly happens before all evaluations sequenced before the heavy fence, or vice versa, it requires a level of ordering that cannot be established by `membarrier()` in the Case 3 execution path. Therefore, it is not directly implementable using the system call, as the syscall is inherently incapable of providing the required semantics.
 
 I had an incredibly insightful discussion with David regarding this behavior (and other things in the proposal), here is his response regarding this analysis:
 > Hmmm, this analysis seems right to me (or at least, right-looking enough that I now lack confidence in the P1202 claim is correct). I think I had convinced myself that either:  
